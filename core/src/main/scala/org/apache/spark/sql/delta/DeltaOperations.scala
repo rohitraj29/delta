@@ -17,19 +17,17 @@
 package org.apache.spark.sql.delta
 
 // scalastyle:off import.ordering.noEmptyLine
-import org.apache.spark.sql.delta.actions.{Metadata, Protocol}
-import org.apache.spark.sql.delta.constraints.Constraint
-import org.apache.spark.sql.delta.sources.DeltaSQLConf
-import org.apache.spark.sql.delta.util.JsonUtils
-
-import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.DeltaMergeIntoClause
+import org.apache.spark.sql.delta.actions.{Metadata, Protocol}
+import org.apache.spark.sql.delta.sources.DeltaSQLConf
+import org.apache.spark.sql.delta.util.JsonUtils
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.{SaveMode, SparkSession}
 
 /**
  * Exhaustive list of operations that can be performed on a Delta table. These operations are
@@ -431,14 +429,17 @@ object DeltaOperations {
   val OPTIMIZE_OPERATION_NAME = "OPTIMIZE"
   /** parameter key to indicate which columns to z-order by */
   val ZORDER_PARAMETER_KEY = "zOrderBy"
-
+  /** operation name for auto-compaction */
+  val AUTOCOMPACTION_OPERATION_NAME = "auto"
   /** Recorded when optimizing the table. */
   case class Optimize(
       predicate: Seq[Expression],
-      zOrderBy: Seq[String] = Seq.empty
+      zOrderBy: Seq[String] = Seq.empty,
+      auto: Boolean
   ) extends OptimizeOrReorg(OPTIMIZE_OPERATION_NAME, predicate) {
     override val parameters: Map[String, Any] = super.parameters ++ Map(
-      ZORDER_PARAMETER_KEY -> JsonUtils.toJson(zOrderBy)
+      ZORDER_PARAMETER_KEY -> JsonUtils.toJson(zOrderBy),
+      AUTOCOMPACTION_OPERATION_NAME -> auto
     )
 
     override val operationMetrics: Set[String] = DeltaOperationMetrics.OPTIMIZE

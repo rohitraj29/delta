@@ -17,34 +17,32 @@
 package org.apache.spark.sql.delta
 
 // scalastyle:off import.ordering.noEmptyLine
-import java.nio.file.FileAlreadyExistsException
-import java.util.{ConcurrentModificationException, UUID}
-import java.util.concurrent.TimeUnit.NANOSECONDS
-
-import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, HashSet}
-import scala.util.control.NonFatal
-
 import com.databricks.spark.util.TagDefinitions.TAG_LOG_STORE_CLASS
+import org.apache.hadoop.fs.Path
+import org.apache.spark.SparkException
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.util.CharVarcharUtils
 import org.apache.spark.sql.delta.DeltaOperations.Operation
 import org.apache.spark.sql.delta.actions._
 import org.apache.spark.sql.delta.commands.DeletionVectorUtils
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
 import org.apache.spark.sql.delta.files._
-import org.apache.spark.sql.delta.hooks.{CheckpointHook, GenerateSymlinkManifest, PostCommitHook}
+import org.apache.spark.sql.delta.hooks.{CheckpointHook, DoAutoCompaction, GenerateSymlinkManifest, PostCommitHook}
 import org.apache.spark.sql.delta.implicits.addFileEncoder
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.schema.{SchemaMergingUtils, SchemaUtils}
 import org.apache.spark.sql.delta.sources.DeltaSQLConf
 import org.apache.spark.sql.delta.stats._
-import org.apache.hadoop.fs.Path
-
-import org.apache.spark.SparkException
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.util.CharVarcharUtils
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
 import org.apache.spark.util.{Clock, Utils}
+
+import java.nio.file.FileAlreadyExistsException
+import java.util.concurrent.TimeUnit.NANOSECONDS
+import java.util.{ConcurrentModificationException, UUID}
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, HashSet}
+import scala.util.control.NonFatal
 
 /** Record metrics about a successful commit. */
 case class CommitStats(
@@ -1024,7 +1022,16 @@ trait OptimisticTransactionImpl extends TransactionalWrite
       if (DeltaConfigs.SYMLINK_FORMAT_MANIFEST_ENABLED.fromMetaData(metadata) && hasFileActions) {
         registerPostCommitHook(GenerateSymlinkManifest)
       }
-
+      lazy val autoCompactEnabled =
+        spark.sessionState.conf
+          .getConf(DeltaSQLConf.AUTO_COMPACT_ENABLED)
+          .getOrElse{
+            DeltaConfigs.AUTO_COMPACT.fromMetaData(metadata)
+          }
+      if (!op.isInstanceOf[DeltaOperations.Optimize] && autoCompactEnabled && hasFileActions)
+      {
+        registerPostCommitHook(DoAutoCompaction)
+      }
       commitAttemptStartTime = clock.getTimeMillis()
       if (preparedActions.isEmpty && canSkipEmptyCommits &&
           skipRecordingEmptyCommitAllowed(isolationLevelToUse)) {

@@ -16,18 +16,16 @@
 
 package org.apache.spark.sql.delta
 
-import java.util.{HashMap, Locale}
-
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.util.{DateTimeConstants, IntervalUtils}
 import org.apache.spark.sql.delta.actions.{Action, Metadata, Protocol, TableFeatureProtocolUtils}
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.sources.DeltaSQLConf
 import org.apache.spark.sql.delta.stats.DataSkippingReader
-
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.util.{DateTimeConstants, IntervalUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
-import org.apache.spark.util.Utils
+
+import java.util.{HashMap, Locale}
 
 case class DeltaConfig[T](
     key: String,
@@ -473,6 +471,13 @@ trait DeltaConfigsBase extends DeltaLogging {
     "autoOptimize",
     null,
     v => Option(v).map(_.toBoolean),
+    _ => true,
+    "needs to be a boolean.")
+
+  val AUTO_COMPACT = buildConfig[Boolean](
+    "autoOptimize.autoCompact",
+    "false",
+    _.toBoolean,
     _ => true,
     "needs to be a boolean.")
 
